@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="segway">
+  <material
+    name="black">
+    <color rgba="0.15 0.15 0.15 1.0"/>
+  </material>
+  <material
+    name="blue">
+    <color rgba="0.0 0.125 0.53 1.0"/>
+  </material>
+  <material
+    name="white">
+    <color rgba="0.8 0.8 0.8 1.0"/>
+  </material>
+   <material
+     name="red">
+     <color rgba="1.0 0.0 0.0 1.0"/>
+   </material>
+
+
+  <link name="Segway_TORSO">
+    <inertial>
+      <origin
+        xyz="0.04171 -0.00167 0.05873"
+        rpy="0 0 0" />
+      <mass
+        value="14.1468" />
+      <inertia
+        ixx="0.46196144111"
+        ixy="-0.00152974710"
+        ixz="0.03040197799"
+        iyy="0.40557616359"
+        iyz="0.00765353691"
+        izz="0.13941915327" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh filename="raiway_TORSO_new.STL"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin
+        xyz="0.043 0 0.165677"
+        rpy="0 0 0" />
+      <geometry>
+        <box size="0.101 0.276 0.415" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin
+        xyz="0.043 0.075 -0.11413"
+        rpy="1.57079632679 0 0" />
+      <geometry>
+        <cylinder length="0.07" radius="0.0635"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin
+        xyz="0.043 -0.075 -0.11413"
+        rpy="1.57079632679 0 0" />
+      <geometry>
+        <cylinder length="0.07" radius="0.0635"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="Segway_L_THIGH">
+    <inertial>
+      <origin
+        xyz="-0.00937 -0.02917 -0.04221"
+        rpy="0 0 0" />
+      <mass
+        value="3.2778" />
+      <inertia
+        ixx="0.04260892976"
+        ixy="0.00005114275"
+        ixz="0.00537573634"
+        iyy="0.04162490269"
+        iyz="0.00032962679"
+        izz="0.01011108293" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh filename="raiway_L_THIGH.STL"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+        <origin rpy="0 0 0" xyz="-0.04575 0 -0.13"/>
+        <geometry>
+          <box size="0.05150 0.03446 0.23"/>
+        </geometry>
+    </collision>
+    <collision>
+        <origin rpy="1.57079632679 0 0" xyz="0 -0.035 0"/>
+        <geometry>
+          <cylinder length="0.1" radius="0.0635"/>
+        </geometry>
+    </collision>
+  </link>
+  <joint
+    name="L_HFE"
+    type="revolute">
+    <origin
+      xyz="0.0435 0.20098 -0.11413"
+      rpy="0 0 0" />
+    <parent link="Segway_TORSO" />
+    <child link="Segway_L_THIGH" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-3.14"
+      upper="3.14"
+      effort="90"
+      velocity="25" />
+    <dynamics
+       rotor_inertia="0.022811353" />
+  </joint>
+
+  <link name="Segway_L_SHANK">
+    <inertial>
+      <origin
+        xyz="0.00002 0.00135 -0.28255"
+        rpy="0 0 0" />
+      <mass
+        value="2.4835" />
+      <inertia
+        ixx="0.22103282154"
+        ixy="0.00000349733"
+        ixz="-0.00000396431"
+        iyy="0.22272558982"
+        iyz="-0.00111303858"
+        izz="0.00325186068" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh filename="raiway_L_SHANK.STL"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin rpy="0 1.57079632679 0" xyz="0 0 -0.14"/>
+      <geometry>
+        <box size="0.415 0.03186 0.029"/>
+      </geometry>
+    </collision>
+    <collision>
+        <origin rpy="1.57079632679 0 0" xyz="0 0 -0.32"/>
+        <geometry>
+            <cylinder length="0.07" radius="0.0635"/>
+        </geometry>
+    </collision>
+  </link>
+
+  <joint
+    name="L_KFE"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.320"
+      rpy="0 0 0" />
+    <parent link="Segway_L_THIGH" />
+    <child link="Segway_L_SHANK" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-2.6843164"
+      upper="-0.4572763"
+      effort="90"
+      velocity="25" />
+    <dynamics
+       rotor_inertia="0.022811353" />
+  </joint>
+
+  <link name="Segway_L_WHEEL">
+    <inertial>
+      <origin
+        xyz="0 0.08642 0"
+        rpy="0 0 0" />
+      <mass
+        value="@@L_wheel_mass" />
+      <inertia
+        ixx="0.04388230422"
+        ixy="-0.00000001066"
+        ixz="-0.00000001083"
+        iyy="@@L_wheel_inertia"
+        iyz="-0.00000003194"
+        izz="0.04388227272" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh filename="raiway_L_WHEEL.STL" />
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="1.57079632679 0 0" xyz="0 {@@L_wheel_distance} 0"/>
+      <geometry>
+        <cylinder radius="@@L_wheel_radius" length="@@L_wheel_length"/>
+      </geometry>
+      <material name="">
+        <contact name="L_FOOT_MATERIAL"/>
+      </material>
+    </collision>
+  </link>
+
+  <joint
+      name="L_WHEEL"
+      type="revolute">
+      <origin
+        xyz="{@@L_footpos_x} {@@L_footpos_y} {@@L_footpos_z}"
+        rpy="0 0 0" />
+      <parent link="Segway_L_SHANK" />
+      <child link="Segway_L_WHEEL" />
+      <axis
+        xyz="0 1 0" />
+      <limit
+        effort="90"
+        velocity="25" />
+      <dynamics
+         rotor_inertia="0.022811353" />
+  </joint>
+  <link name="Segway_R_THIGH">
+    <inertial>
+      <origin
+        xyz="-0.00937 0.02917 -0.04221"
+        rpy="0 0 0" />
+      <mass
+        value="3.2778" />
+      <inertia
+        ixx="0.04260892976"
+        ixy="-0.00005114275"
+        ixz="0.00537573634"
+        iyy="0.04162490269"
+        iyz="-0.00032962679"
+        izz="0.01011108293" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh filename="raiway_R_THIGH.STL"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.04575 0 -0.13"/>
+      <geometry>
+        <box size="0.05150 0.03446 0.23"/>
+      </geometry>
+    </collision>
+    <collision>
+        <origin rpy="1.57079632679 0 0" xyz="0 0.035 0"/>
+        <geometry>
+            <cylinder length="0.1" radius="0.0635"/>
+        </geometry>
+    </collision>
+  </link>
+  <joint
+    name="R_HFE"
+    type="revolute">
+    <origin
+      xyz="0.0435 -0.20098 -0.11413"
+      rpy="0 0 0" />
+    <parent link="Segway_TORSO" />
+    <child link="Segway_R_THIGH" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-3.14"
+      upper="3.14"
+      effort="90"
+      velocity="25" />
+    <dynamics
+       rotor_inertia="0.022811353" />
+  </joint>
+
+  <link name="Segway_R_SHANK">
+    <inertial>
+      <origin
+        xyz="0.00002 -0.00135 -0.28255"
+        rpy="0 0 0" />
+      <mass
+        value="2.4835" />
+      <inertia
+        ixx="0.22103282154"
+        ixy="-0.00000349733"
+        ixz="-0.00000396431"
+        iyy="0.22272558982"
+        iyz="0.00111303858"
+        izz="0.00325186068" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh filename="raiway_R_SHANK.STL"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin rpy="0 1.57079632679 0" xyz="0 0 -0.14"/>
+      <geometry>
+        <box size="0.415 0.03186 0.029"/>
+      </geometry>
+    </collision>
+    <collision>
+        <origin rpy="1.57079632679 0 0" xyz="0 0 -0.32"/>
+        <geometry>
+          <cylinder length="0.07" radius="0.0635"/>
+        </geometry>
+    </collision>
+  </link>
+
+  <joint
+    name="R_KFE"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.320"
+      rpy="0 0 0" />
+    <parent link="Segway_R_THIGH" />
+    <child link="Segway_R_SHANK" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-2.6843164"
+      upper="-0.4572763"
+      effort="90"
+      velocity="25" />
+    <dynamics
+       rotor_inertia="0.022811353" />
+  </joint>
+
+  <link name="Segway_R_WHEEL">
+    <inertial>
+      <origin
+        xyz="0 -0.08642 0"
+        rpy="0 0 0" />
+      <mass
+        value="@@R_wheel_mass" />
+      <inertia
+        ixx="0.04388230422"
+        ixy="0.00000001066"
+        ixz="-0.00000001083"
+        iyy="@@R_wheel_inertia"
+        iyz="0.00000003194"
+        izz="0.04388227272" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh filename="raiway_R_WHEEL.STL" />
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="1.57079632679 0 0" xyz="0 {-@@R_wheel_distance} 0"/>
+      <geometry>
+        <cylinder radius="@@R_wheel_radius" length="@@R_wheel_length"/>
+      </geometry>
+      <material name="">
+        <contact name="R_FOOT_MATERIAL"/>
+      </material>
+    </collision>
+  </link>
+
+  <joint
+      name="R_WHEEL"
+      type="revolute">
+      <origin
+        xyz="{@@R_footpos_x} {@@R_footpos_y} {@@R_footpos_z}"
+        rpy="0 0 0" />
+      <parent link="Segway_R_SHANK" />
+      <child link="Segway_R_WHEEL" />
+      <axis
+        xyz="0 1 0" />
+      <limit
+        effort="90"
+        velocity="25" />
+      <dynamics
+         rotor_inertia="0.022811353" />
+  </joint>
+
+</robot>
