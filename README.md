@@ -12,45 +12,94 @@ physics, contacts and height map, so what the viewer shows is what the policy wa
 
 Needs raisim2Lib (its `raisim` SDK and `examples/include`) next to this directory, or elsewhere through
 `-DRAISIM2LIB_DIR`, g++-10 or another C++20 compiler, CMake 3.18 and the RaiSim activation file in `~/.raisim`.
+libX11 is optional and gives the keyboard control.
 
 ```bash
 cmake -S . -B build
 cmake --build build -j8
+./run.sh                       # server, browser viewer and the page in the browser, all at once
+```
+
+`run.sh` sources `../raisim2Lib/raisim_env.sh` (`RAISIM2LIB_DIR` points elsewhere), serves the viewer on port 8000,
+opens `http://localhost:8000/web-examples/index.html?connect=127.0.0.1:8080` and runs the server in the foreground;
+Ctrl+C ends both. Its arguments go to the server, `--no-browser` aside. The two halves also run on their own:
+
+```bash
 source ../raisim2Lib/raisim_env.sh
-./build/raiway_demo            # RaisimServer on 127.0.0.1:8080
-./build/raiway_demo --lan      # also accepts viewers from other computers
+./build/raiway_demo            # RaisimServer on 127.0.0.1:8080, remote keys on UDP 8081
+./build/raiway_demo --lan      # also accepts viewers and keys from other computers
+./build/raiway_demo --port 8082 --key-port 8083
+python3 web/serve_viewer.py    # the browser viewer, see below
 ```
 
 `rsc/raiway` is found relative to the executable like raisim2Lib's `rsc`, so the program also runs from another
 working directory.
 
-The Controls window of the viewer has six sliders:
+The Controls window of the viewer has eight sliders:
 
 - **Forward speed vx** (-1.5 to 1.5 m/s) and **Yaw rate wz** (-2 to 2 rad/s): the velocity command, the same
   interface the policy sees in both training episode types. Leaving both near zero makes the robot stand.
+- **Key forward speed** and **Key yaw rate**: the command a held key gives (below).
 - **Terrain** (0 flat, 1 stairs, 2 steps, 3 holes, 4 hurdles) and **Terrain level** (0 to 1): the terrain is
   rebuilt and the robot reset half a second after the slider stops moving.
 - **Policy**: index into the exported checkpoints, listed with their labels in the slider name and on the console.
 - **Reset**: moving it anywhere resets the robot. A fall (any contact other than the wheels and shanks, or the base
   tilted past 60°) resets it one second later, and so does driving off the map.
 
+Held keys drive like a joystick: while ↑/↓ or W/S is down the command is ±the key forward speed, while ←/→ or
+A/D is down ±the key yaw rate, and releasing them returns to the vx/wz sliders; R resets. The program polls the
+key state of the X display it was started on (`DISPLAY`), so the keys work whichever window has focus, the browser
+included. From another computer, `web/keys.py <host> [port]` sends that computer's held keys to the server's UDP key
+port (8081) twenty times a second, and the server releases them half a second after the last message. The viewer
+itself cannot send keys.
+
 The orange spheres are the actor's height scan, the points the policy reads the terrain at. The viewer's own
 Simulation row pauses and steps the server.
 
 ## Viewing from a browser
 
-The `webassembly-<version>.zip` of a raisim2Lib release holds the browser version of `rayrai_tcp_viewer`. Unzip it
-and serve it from the computer whose browser will view the demo:
+The `webassembly-<version>.zip` of a raisim2Lib release holds the browser version of `rayrai_tcp_viewer`. A browser
+cannot read the robot's meshes from the server's disk, so `web/serve_viewer.py` serves a copy of the bundle whose
+viewer page stores `rsc/raiway` in the viewer's file system (under `/examples/rsc/raiway`, the one place its file
+writer accepts) and starts the viewer with that directory as a resource directory, where the streamed meshes and
+the shared scene files are found by their path tails; the robot then shows without any download prompt. Unzip the bundle next to this repository (or pass `--bundle`) and run, on the
+computer whose browser will view the demo:
 
 ```bash
-python3 serve.py --port 8000       # in the unzipped webassembly-<version> directory
+python3 web/serve_viewer.py              # http://localhost:8000/web-examples/index.html, --port and --out to change
 ```
 
-Open `http://localhost:8000/web-examples/index.html`, choose *Connect to a server* and enter the host and port of the
-computer running `raiway_demo` (`127.0.0.1:8080` on the same computer). The browser needs WebGPU, so a current Chrome or
-Edge. A server reached from another computer has to be started with `--lan`; pages served from `localhost` are
-accepted without further setup, and `https://raisim.com`'s copy of the viewer can only reach a server on its own
-computer.
+Open that address, choose *Connect to a server* and enter the host and port of the computer running `raiway_demo`
+(`127.0.0.1:8080` on the same computer), or open it as `index.html?connect=127.0.0.1:8080`. The copy lives in
+`build/web` and is refreshed from the bundle and `rsc/raiway` on every start, so re-run the script after an export.
+The browser needs WebGPU, so a current Chrome or Edge; on Linux, Chrome still keeps it behind
+`chrome://flags/#enable-unsafe-webgpu` and `#enable-vulkan`. A server reached from another computer has to be
+started with `--lan`; pages served from `localhost` are accepted without further setup, and `https://raisim.com`'s
+copy of the viewer can only reach a server on its own computer, and shows no robot since it has no way to get the
+meshes.
+
+## Viewing from a Windows (or any other) computer without RaiSim
+
+The other computer needs Python 3 and Chrome or Edge, nothing of RaiSim. On the Linux computer start the server for
+the network and open its ports if a firewall is on:
+
+```bash
+./run.sh --lan                              # or ./build/raiway_demo --lan
+sudo ufw allow 8080/tcp && sudo ufw allow 8081/udp
+```
+
+On the other computer, clone this repository (for `rsc/raiway` and the scripts), unzip the WebAssembly bundle next
+to it, then:
+
+```bat
+python web\serve_viewer.py
+pip install pynput
+python web\keys.py <IP of the Linux computer>
+```
+
+and open `http://localhost:8000/web-examples/index.html?connect=<IP of the Linux computer>:8080`. The viewer page
+must be served on the viewing computer itself (`localhost`), since the server accepts browser pages from `localhost`
+and from `https://raisim.com` only; a page on any other host needs `RaisimServer::allowWebViewerOrigin()`.
 
 ## Policies
 
@@ -62,8 +111,9 @@ cd ../raisimGymForSegway/raisimGymForSegway/sim2sim
 python export_raisim2_demo.py -w <RUN>/full_XXX.pt [-l "label"] [--default]   # writes ../../../raiway_demo_raisim2/rsc/raiway (-o overrides)
 ```
 
-Each export adds or replaces `policies/<name>/policy.txt` and its line in `policies.txt`, and copies the URDF and
-meshes from the training repository; the name is the run directory unless `-n` gives another. `--default` names the
+Each export adds or replaces `policies/<name>/policy.txt` and its line in `policies.txt`, writes the URDF with the
+nominal wheel parameters filled in (`raiway.urdf`) and the `raiway.rscene` that places it, and copies the meshes
+from the training repository; the name is the run directory unless `-n` gives another. `--default` names the
 policy the program starts with. To drop a policy, delete its folder and its line.
 
 `policy.txt` is plain text: the observation normalizer, the actor's linear layers (LeakyReLU between them, the

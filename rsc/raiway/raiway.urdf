@@ -38,7 +38,7 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <mesh filename="raiway_TORSO_new.STL"/>
+        <mesh filename="meshes/raiway_TORSO_new.STL"/>
       </geometry>
       <material name="white"/>
     </visual>
@@ -88,7 +88,7 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <mesh filename="raiway_L_THIGH.STL"/>
+        <mesh filename="meshes/raiway_L_THIGH.STL"/>
       </geometry>
       <material name="blue"/>
     </visual>
@@ -144,7 +144,7 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <mesh filename="raiway_L_SHANK.STL"/>
+        <mesh filename="meshes/raiway_L_SHANK.STL"/>
       </geometry>
       <material name="black"/>
     </visual>
@@ -187,12 +187,12 @@
         xyz="0 0.08642 0"
         rpy="0 0 0" />
       <mass
-        value="@@L_wheel_mass" />
+        value="1.46382" />
       <inertia
         ixx="0.04388230422"
         ixy="-0.00000001066"
         ixz="-0.00000001083"
-        iyy="@@L_wheel_inertia"
+        iyy="0.102"
         iyz="-0.00000003194"
         izz="0.04388227272" />
     </inertial>
@@ -201,14 +201,14 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <mesh filename="raiway_L_WHEEL.STL" />
+        <mesh filename="meshes/raiway_L_WHEEL.STL" />
       </geometry>
       <material name="white"/>
     </visual>
     <collision>
-      <origin rpy="1.57079632679 0 0" xyz="0 {@@L_wheel_distance} 0"/>
+      <origin rpy="1.57079632679 0 0" xyz="0 0.09745 0"/>
       <geometry>
-        <cylinder radius="@@L_wheel_radius" length="@@L_wheel_length"/>
+        <cylinder radius="0.254" length="0.052"/>
       </geometry>
       <material name="">
         <contact name="L_FOOT_MATERIAL"/>
@@ -220,7 +220,7 @@
       name="L_WHEEL"
       type="revolute">
       <origin
-        xyz="{@@L_footpos_x} {@@L_footpos_y} {@@L_footpos_z}"
+        xyz="0.0 0.0 -0.32"
         rpy="0 0 0" />
       <parent link="Segway_L_SHANK" />
       <child link="Segway_L_WHEEL" />
@@ -252,7 +252,7 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <mesh filename="raiway_R_THIGH.STL"/>
+        <mesh filename="meshes/raiway_R_THIGH.STL"/>
       </geometry>
       <material name="blue"/>
     </visual>
@@ -308,7 +308,7 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <mesh filename="raiway_R_SHANK.STL"/>
+        <mesh filename="meshes/raiway_R_SHANK.STL"/>
       </geometry>
       <material name="black"/>
     </visual>
@@ -351,12 +351,12 @@
         xyz="0 -0.08642 0"
         rpy="0 0 0" />
       <mass
-        value="@@R_wheel_mass" />
+        value="1.46382" />
       <inertia
         ixx="0.04388230422"
         ixy="0.00000001066"
         ixz="-0.00000001083"
-        iyy="@@R_wheel_inertia"
+        iyy="0.102"
         iyz="0.00000003194"
         izz="0.04388227272" />
     </inertial>
@@ -365,14 +365,14 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <mesh filename="raiway_R_WHEEL.STL" />
+        <mesh filename="meshes/raiway_R_WHEEL.STL" />
       </geometry>
       <material name="white"/>
     </visual>
     <collision>
-      <origin rpy="1.57079632679 0 0" xyz="0 {-@@R_wheel_distance} 0"/>
+      <origin rpy="1.57079632679 0 0" xyz="0 -0.09745 0"/>
       <geometry>
-        <cylinder radius="@@R_wheel_radius" length="@@R_wheel_length"/>
+        <cylinder radius="0.254" length="0.052"/>
       </geometry>
       <material name="">
         <contact name="R_FOOT_MATERIAL"/>
@@ -384,7 +384,7 @@
       name="R_WHEEL"
       type="revolute">
       <origin
-        xyz="{@@R_footpos_x} {@@R_footpos_y} {@@R_footpos_z}"
+        xyz="0.0 0.0 -0.32"
         rpy="0 0 0" />
       <parent link="Segway_R_SHANK" />
       <child link="Segway_R_WHEEL" />

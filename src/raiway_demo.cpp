@@ -1,10 +1,18 @@
 // Raiway, a wheel-legged biped, drives its perceptive RL policy over stairs, blocks, holes and hurdles.
-// The viewer's Controls window gives the velocity command and chooses terrain, level and policy.
+// The viewer's Controls window and the arrow keys, held on this display or sent by web/keys.py from
+// another computer, give the velocity command; the Controls window also chooses terrain, level and policy.
+
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -15,6 +23,17 @@
 #include "raisim/RaisimServer.hpp"
 #include "raisim/World.hpp"
 #include "rayrai_tcp_viewer_hint.hpp"
+
+/// after Eigen, whose enumerators X.h's macros would rename
+#ifdef RAIWAY_X11
+#include <X11/Xlib.h>
+#include <X11/keysym.h>
+#undef Success
+#undef None
+#undef Status
+#undef Bool
+#undef Always
+#endif
 
 namespace {
 
@@ -252,20 +271,9 @@ class RaiwayDemo {
       : world_(world), server_(server), policies_(loadPolicies(rsc)) {
     /// cfg.yaml's restitution defaults, what training uses with its restitution randomization off
     world_.setDefaultMaterial(0.8, 0.5, 0.1);
-    std::vector<raisim::World::ParameterContainer> params;
-    for (const char* side : {"L", "R"}) {
-      const std::string s = side;
-      params.push_back({s + "_wheel_radius", std::to_string(kWheelRadius)});
-      params.push_back({s + "_wheel_distance", std::to_string(kTireOffset)});
-      params.push_back({s + "_wheel_length", std::to_string(2.0 * kWheelHalfWidth)});
-      params.push_back({s + "_wheel_mass", "1.46382"});
-      params.push_back({s + "_wheel_inertia", "0.102"});
-      params.push_back({s + "_footpos_x", "0.0"});
-      params.push_back({s + "_footpos_y", "0.0"});
-      params.push_back({s + "_footpos_z", "-0.320"});
-    }
-    robot_ = world_.addArticulatedSystem(rsc + "/urdf/raiway_param_20inch_new.urdf", params);
-    robot_->setName("robot");
+    /// the robot comes from raiway.rscene, so the server can send its meshes to a browser viewer
+    robot_ = dynamic_cast<raisim::ArticulatedSystem*>(world_.getObject("/World/Raiway"));
+    RSFATAL_IF(!robot_, "the world holds no /World/Raiway; build it from " << rsc << "/raiway.rscene")
     robot_->setControlMode(raisim::ControlMode::FORCE_AND_TORQUE);
     gcDim_ = int(robot_->getGeneralizedCoordinateDim());
     gvDim_ = int(robot_->getDOF());
@@ -539,6 +547,109 @@ class RaiwayDemo {
   bool lastResetWasFall_ = false;
 };
 
+/// Arrow or WASD keys held anywhere on this X display drive the robot like a joystick; R resets.
+class HeldKeys {
+ public:
+  struct State {
+    double forward = 0.0, turn = 0.0;
+    bool reset = false;
+  };
+
+  HeldKeys() {
+#ifdef RAIWAY_X11
+    display_ = XOpenDisplay(nullptr);
+    if (!display_) {
+      std::cout << "no X display: the sliders alone give the command" << std::endl;
+      return;
+    }
+    for (auto& [sym, code] : keys_) code = XKeysymToKeycode(display_, sym);
+    std::cout << "hold up/down or W/S to drive, left/right or A/D to turn, anywhere on this display; R resets" << std::endl;
+#else
+    std::cout << "built without X11: the sliders alone give the command" << std::endl;
+#endif
+  }
+
+  State poll() {
+    State state;
+#ifdef RAIWAY_X11
+    if (!display_) return state;
+    char map[32];
+    XQueryKeymap(display_, map);
+    auto down = [&](size_t i) { return (map[keys_[i].second / 8] >> (keys_[i].second % 8)) & 1; };
+    state.forward = double(down(0) || down(4)) - double(down(1) || down(5));
+    state.turn = double(down(2) || down(6)) - double(down(3) || down(7));
+    const bool resetDown = down(8);
+    state.reset = resetDown && !resetWasDown_;
+    resetWasDown_ = resetDown;
+#endif
+    return state;
+  }
+
+ private:
+#ifdef RAIWAY_X11
+  Display* display_ = nullptr;
+  std::array<std::pair<KeySym, KeyCode>, 9> keys_{{{XK_Up, 0}, {XK_Down, 0}, {XK_Left, 0}, {XK_Right, 0},
+                                                   {XK_w, 0}, {XK_s, 0}, {XK_a, 0}, {XK_d, 0}, {XK_r, 0}}};
+#endif
+  bool resetWasDown_ = false;
+};
+
+/// Held keys sent by web/keys.py over UDP as "forward turn reset" lines, for a viewer on another computer.
+class KeyLink {
+ public:
+  explicit KeyLink(int port) {
+    if (port <= 0) return;
+    socket_ = socket(AF_INET, SOCK_DGRAM, 0);
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_ANY);
+    address.sin_port = htons(uint16_t(port));
+    if (socket_ < 0 || bind(socket_, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0) {
+      std::cout << "UDP port " << port << " is taken: no remote keys" << std::endl;
+      if (socket_ >= 0) close(socket_);
+      socket_ = -1;
+      return;
+    }
+    fcntl(socket_, F_SETFL, O_NONBLOCK);
+    std::cout << "remote keys: run web/keys.py <this host> " << port << " on the viewer's computer" << std::endl;
+  }
+  ~KeyLink() { if (socket_ >= 0) close(socket_); }
+
+  HeldKeys::State poll() {
+    HeldKeys::State state;
+    if (socket_ < 0) return state;
+    char buffer[64];
+    sockaddr_in from{};
+    socklen_t fromLength = sizeof(from);
+    ssize_t length;
+    while ((length = recvfrom(socket_, buffer, sizeof(buffer) - 1, 0, reinterpret_cast<sockaddr*>(&from), &fromLength)) > 0) {
+      buffer[length] = 0;
+      int reset = 0;
+      if (std::sscanf(buffer, "%lf %lf %d", &forward_, &turn_, &reset) == 3) {
+        resetHeld_ = reset != 0;
+        received_ = std::chrono::steady_clock::now();
+        if (!announced_) {
+          std::cout << "keys from " << inet_ntoa(from.sin_addr) << std::endl;
+          announced_ = true;
+        }
+      }
+    }
+    /// a client that stopped sending, or lost its network, releases its keys after half a second
+    if (std::chrono::steady_clock::now() - received_ > std::chrono::milliseconds(500)) return state;
+    state.forward = std::clamp(forward_, -1.0, 1.0);
+    state.turn = std::clamp(turn_, -1.0, 1.0);
+    state.reset = resetHeld_ && !resetWasHeld_;
+    resetWasHeld_ = resetHeld_;
+    return state;
+  }
+
+ private:
+  int socket_ = -1;
+  double forward_ = 0.0, turn_ = 0.0;
+  bool resetHeld_ = false, resetWasHeld_ = false, announced_ = false;
+  std::chrono::steady_clock::time_point received_{};
+};
+
 int terrainIndex(const std::string& name) {
   const auto it = std::find(kTerrainNames.begin(), kTerrainNames.end(), name);
   RSFATAL_IF(it == kTerrainNames.end(), "no terrain named " << name << "; flat, stairs, steps, holes or hurdles")
@@ -587,8 +698,14 @@ int runHeadless(raisim::World& world, RaiwayDemo& demo, int argc, char* argv[]) 
 int main(int argc, char* argv[]) {
   const std::string rsc = exampleRscPath(argv[0], "raiway");
   const bool headless = argc > 1 && std::string(argv[1]) == "--headless";
-  const bool lan = argc > 1 && std::string(argv[1]) == "--lan";
-  raisim::World world;
+  bool lan = false;
+  int port = 8080, keyPort = 8081;
+  for (int i = 1; i < argc; i++) {
+    if (std::string(argv[i]) == "--lan") lan = true;
+    else if (std::string(argv[i]) == "--port" && i + 1 < argc) port = std::stoi(argv[++i]);
+    else if (std::string(argv[i]) == "--key-port" && i + 1 < argc) keyPort = std::stoi(argv[++i]);
+  }
+  raisim::World world(rsc + "/raiway.rscene");
   if (headless) {
     RaiwayDemo demo(rsc, world, nullptr);
     return runHeadless(world, demo, argc, argv);
@@ -603,12 +720,14 @@ int main(int argc, char* argv[]) {
   }
   const size_t vxSlider = server.addSlider("Forward speed vx [m/s]", -1.5, 1.5, 0.0);
   const size_t wzSlider = server.addSlider("Yaw rate wz [rad/s]", -2.0, 2.0, 0.0);
+  const size_t keyVxSlider = server.addSlider("Key forward speed [m/s]", 0.0, 1.5, 1.0);
+  const size_t keyWzSlider = server.addSlider("Key yaw rate [rad/s]", 0.0, 2.0, 1.5);
   const size_t terrainSlider = server.addSlider("Terrain (0 flat, 1 stairs, 2 steps, 3 holes, 4 hurdles)", 0.0, 4.0, 1.0);
   const size_t levelSlider = server.addSlider("Terrain level", 0.0, 1.0, 1.0);
   const size_t policySlider = server.addSlider("Policy (" + policyNames + ")", 0.0, double(demo.policies().size() - 1), 0.0);
   const size_t resetSlider = server.addSlider("Reset (move to reset)", 0.0, 1.0, 0.0);
   server.setBindLoopbackOnly(!lan);
-  server.launchServer();
+  server.launchServer(port);
   server.focusOn(demo.robot());
   raisim_examples::warnIfNoClientConnected(server);
   auto* scanVisual = server.addInstancedVisuals("scan points", raisim::Shape::Sphere, {0.03, 0.03, 0.03}, {1.0, 0.4, 0.1, 1.0}, {1.0, 0.4, 0.1, 1.0});
@@ -619,10 +738,22 @@ int main(int argc, char* argv[]) {
   int pending[3] = {1, 100, 0};
   Clock::time_point changed = Clock::now();
   double lastReset = server.getSlider(resetSlider);
+  HeldKeys keys;
+  KeyLink keyLink(keyPort);
   int tick = 0;
   bool controlDue = true;
   for (;;) {
     RS_TIMED_LOOP(int(1e6 * world.getTimeStep()))
+    /// a held key, local or remote, overrides the vx/wz sliders; released, the sliders' command returns
+    HeldKeys::State held = keys.poll();
+    const HeldKeys::State remote = keyLink.poll();
+    if (remote.forward != 0.0 || remote.turn != 0.0) held = remote;
+    double vx = server.getSlider(vxSlider), wz = server.getSlider(wzSlider);
+    if (held.forward != 0.0 || held.turn != 0.0) {
+      vx = held.forward * server.getSlider(keyVxSlider);
+      wz = held.turn * server.getSlider(keyWzSlider);
+    }
+    if (held.reset || remote.reset) demo.reset();
     /// a dragged slider settles for half a second before its terrain, level or policy is rebuilt
     const int wanted[3] = {int(std::lround(server.getSlider(terrainSlider))), int(std::lround(100.0 * server.getSlider(levelSlider))),
                            int(std::lround(server.getSlider(policySlider)))};
@@ -648,7 +779,7 @@ int main(int argc, char* argv[]) {
       demo.reset();
     }
     if (controlDue) {
-      demo.control(server.getSlider(vxSlider), server.getSlider(wzSlider));
+      demo.control(vx, wz);
       for (size_t i = 0; i < demo.scanPoints().size(); i++) scanVisual->setPosition(i, demo.scanPoints()[i]);
       controlDue = false;
     }

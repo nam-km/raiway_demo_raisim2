@@ -1,0 +1,4 @@
+raisim_engine_scene 1
+asset_root .
+articulated_resource 1 raiway raiway.urdf
+articulated /World/Raiway 1 0 0 0.814 1 0 0 0 true true
