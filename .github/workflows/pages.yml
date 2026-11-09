@@ -33,6 +33,7 @@ jobs:
       - name: Build the page
         env:
           RAIWAY_WEB_URL: ${{ steps.pages.outputs.base_url }}/
+          GH_TOKEN: ${{ github.token }}
         run: |
           [ -d ~/emsdk ] || git clone --depth 1 https://github.com/emscripten-core/emsdk.git ~/emsdk
           ~/emsdk/emsdk install 4.0.0
