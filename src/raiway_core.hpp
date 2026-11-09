@@ -280,6 +280,13 @@ class RaiwayDemo {
   const Eigen::VectorXd& estimate() const { return estimate_; }
   Eigen::Vector3d bodyLinVel() const { return baseRot_.transpose() * gv_.segment(0, 3); }
   Eigen::Vector3d bodyAngVel() const { return baseRot_.transpose() * gv_.segment(3, 3); }
+  Eigen::VectorXd jointVelocity() const { return gv_.tail(kJoints); }
+  /// the last substep's PD torques as RaiSim applies them, clipped to the URDF effort limits
+  Eigen::VectorXd jointTorque() const {
+    return genForce_.tail(kJoints).cwiseMax(robot_->getActuationLowerLimits().e().tail(kJoints))
+        .cwiseMin(robot_->getActuationUpperLimits().e().tail(kJoints));
+  }
+  double torqueLimit() const { return robot_->getActuationUpperLimits().e().tail(kJoints).maxCoeff(); }
 
   void setPolicy(int index) {
     policyIndex_ = std::clamp(index, 0, int(policies_.size()) - 1);
