@@ -21,7 +21,7 @@ constexpr double kMaxStepPerFrame = 0.1;
 struct Controls {
   float vx = 0.0f, wz = 0.0f, keyVx = 1.0f, keyWz = 1.5f, levelSlider = 1.0f, level = 1.0f;
   int terrain = 1, policy = 0;
-  bool paused = false;
+  bool paused = false, showScan = true;
 };
 
 /// Level edits reach c.level only once the slider is released, since every change rebuilds the terrain.
@@ -45,11 +45,21 @@ void drawPanel(Controls& c, const RaiwayDemo& demo, bool& reset) {
   reset |= ImGui::Button("Reset (R)");
   ImGui::SameLine();
   ImGui::Checkbox("Pause", &c.paused);
+  ImGui::SameLine();
+  ImGui::Checkbox("Height scan", &c.showScan);
   ImGui::Separator();
   ImGui::Text("body vx %+.2f m/s, wz %+.2f rad/s", demo.bodyLinVel()[0], demo.bodyAngVel()[2]);
   ImGui::TextDisabled("Hold arrows or W/A/S/D to drive, R resets.\nDrag to orbit the camera, wheel to zoom.\n"
                       "Orange spheres: the policy's height scan.");
   ImGui::End();
+}
+
+/// bottom left, since the page's license notice takes the bottom right
+void drawPolicyNote(const Policy& p) {
+  const std::string text = "policy " + p.label + "  (" + p.name + ")";
+  const float size = 0.85f * ImGui::GetFontSize();
+  const ImVec2 at(12.0f, ImGui::GetIO().DisplaySize.y - size - 10.0f);
+  ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), size, at, IM_COL32(25, 25, 30, 140), text.c_str());
 }
 
 }  // namespace
@@ -119,11 +129,13 @@ int main() {
 
       viewer.applyPhysicsSnapshot(snapshots.capture(world));
       const auto& points = demo.scanPoints();
-      if (scan->count() != points.size()) scan->resize(points.size());
-      for (size_t i = 0; i < points.size(); i++) scan->setPosition(i, glm::vec3(points[i].x(), points[i].y(), points[i].z()));
+      const size_t shown = controls.showScan ? points.size() : 0;
+      if (scan->count() != shown) scan->resize(shown);
+      for (size_t i = 0; i < shown; i++) scan->setPosition(i, glm::vec3(points[i].x(), points[i].y(), points[i].z()));
       app.endViewport(viewer, viewport, true, false);
 
       drawPanel(controls, demo, reset);
+      drawPolicyNote(demo.policy());
       const bool terrainChanged = controls.terrain != applied.terrain || controls.level != applied.level;
       if (controls.policy != applied.policy) demo.setPolicy(controls.policy);
       if (terrainChanged) demo.setTerrain(controls.terrain, controls.level);

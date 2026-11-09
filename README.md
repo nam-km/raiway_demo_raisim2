@@ -15,7 +15,8 @@ The MuJoCo sibling, `raiway_demo_mujoco`, runs the same policies in MuJoCo.
 Velocity command sliders (vx ±1.5 m/s, wz ±2 rad/s), terrain (flat, stairs, steps, holes, hurdles) and level, policy,
 reset. Holding ↑/↓ or W/S drives at the key forward speed, ←/→ or A/D turns at the key yaw rate; releasing returns to
 the sliders; R resets. A fall (a contact other than wheels and shanks, or tilt past 60°) resets after a second,
-leaving the map at once. Orange spheres are the actor's height scan.
+leaving the map at once. Orange spheres are the actor's height scan; the page's *Height scan* box hides them and
+its bottom-left corner names the running policy.
 
 ## Browser page
 
