@@ -140,9 +140,9 @@ void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color
   for (int side = 0; side < 2; side++)
     for (int k = 0; k < h.count; k++) {
       const double speed = h.at(joint + 3 * side, k), torque = h.at(kJoints + joint + 3 * side, k);
-      /// fades out linearly over the history's kPlotSeconds, so a point is gone by the time it drops off
+      /// cubed, so a point keeps half its alpha after 1 s and is all but gone after 3 s, long before it drops off at 5 s
       const float life = 1.0f - float(h.count - 1 - k) / float(h.length);
-      const int alpha = int((side == 0 ? 250.0f : 125.0f) * life);
+      const int alpha = int((side == 0 ? 250.0f : 125.0f) * life * life * life);
       ImU32 rgb = color & 0x00FFFFFF;
       if (atLimit(torque)) rgb = IM_COL32(255, 160, 40, 0);
       if (!kMotor.inside(speed, torque, kMotor.busLow)) rgb = IM_COL32(255, 60, 60, 0);
