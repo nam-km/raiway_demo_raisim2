@@ -106,7 +106,7 @@ struct Motor {
 };
 const Motor kMotor;
 
-/// One joint pair against its motors' EM-MOR on the low (solid) and high (dashed) bus voltage, older points fainter.
+/// One joint pair against its motors' EM-MOR on the low (solid) and high (dashed) bus voltage, points fading out over 5 s.
 void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color, double torqueLimit, float width) {
   /// RaiSim clips the torque to the URDF effort limit, so a point on it is saturated
   const auto atLimit = [&](double torque) { return std::abs(torque) >= 0.99 * torqueLimit; };
@@ -140,7 +140,9 @@ void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color
   for (int side = 0; side < 2; side++)
     for (int k = 0; k < h.count; k++) {
       const double speed = h.at(joint + 3 * side, k), torque = h.at(kJoints + joint + 3 * side, k);
-      const int alpha = (side == 0 ? 50 : 25) + (side == 0 ? 200 : 100) * k / std::max(1, h.count);
+      /// fades out linearly over the history's kPlotSeconds, so a point is gone by the time it drops off
+      const float life = 1.0f - float(h.count - 1 - k) / float(h.length);
+      const int alpha = int((side == 0 ? 250.0f : 125.0f) * life);
       ImU32 rgb = color & 0x00FFFFFF;
       if (atLimit(torque)) rgb = IM_COL32(255, 160, 40, 0);
       if (!kMotor.inside(speed, torque, kMotor.busLow)) rgb = IM_COL32(255, 60, 60, 0);
@@ -197,7 +199,7 @@ void drawPanel(Controls& c, const RaiwayDemo& demo, const Readout& r, const Join
     }
   }
   if (ImGui::CollapsingHeader("Motor Operating Region", ImGuiTreeNodeFlags_DefaultOpen)) {
-    ImGui::TextDisabled("ILM 115x25 x 7.15, 57 V solid, 65 V dashed, last 5 s\norange: at the 90 N\xC2\xB7m clip, red: outside at 57 V");
+    ImGui::TextDisabled("ILM 115x25 x 7.15, 57 V solid, 65 V dashed, fading over 5 s\norange: at the 90 N\xC2\xB7m clip, red: outside at 57 V");
     const float width = (fullWidth - 2.0f * ImGui::GetStyle().ItemSpacing.x) / 3.0f;
     for (int j = 0; j < 3; j++) {
       if (j) ImGui::SameLine();
