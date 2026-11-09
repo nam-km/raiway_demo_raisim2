@@ -287,11 +287,6 @@ class RaiwayDemo {
         .cwiseMin(robot_->getActuationUpperLimits().e().tail(kJoints));
   }
   double torqueLimit() const { return robot_->getActuationUpperLimits().e().tail(kJoints).maxCoeff(); }
-  /// 0 when the URDF leaves a joint's velocity unlimited
-  double speedLimit() const {
-    const Eigen::VectorXd limits = robot_->getJointVelocityLimits().e().tail(kJoints);
-    return limits.allFinite() ? limits.maxCoeff() : 0.0;
-  }
 
   void setPolicy(int index) {
     policyIndex_ = std::clamp(index, 0, int(policies_.size()) - 1);

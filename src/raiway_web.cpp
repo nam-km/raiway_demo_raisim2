@@ -85,20 +85,40 @@ void plotJoint(const char* title, const JointHistory& h, int row, ImU32 color, c
   ImGui::EndGroup();
 }
 
-/// One joint pair in its torque-speed plane: the URDF effort and velocity limits as the region, older points fainter.
-void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color, double speedLimit, double torqueLimit, float width) {
-  /// RaiSim clips the torque to the limit, so a point on it is a saturated motor
+/// TQ RoboDrive ILM 115x25 (star-serial) behind Raiway's 7.15:1 reducer, on the 16s pack's 57-65 V bus
+struct Motor {
+  double torqueConstant = 0.281, terminalResistance = 0.14, peakTorque = 12.7, gearRatio = 7.15, busLow = 57.0, busHigh = 65.0;
+  /// field-oriented control reaches a line-to-line peak of the bus voltage, sqrt(3) x the (2/3) kt phase back-EMF
+  double speedPerVolt() const { return 1.0 / (std::sqrt(3.0) * 2.0 / 3.0 * torqueConstant); }
+  /// the line-to-line drop of the phase current over half the terminal resistance, per motor N·m
+  double voltsPerTorque() const { return std::sqrt(3.0) * 0.5 * terminalResistance / torqueConstant; }
+  double peakJointTorque() const { return peakTorque * gearRatio; }
+  /// the EM-MOR at a joint: the bus voltage band of the motor equation cut by the peak torque
+  bool inside(double jointSpeed, double jointTorque, double bus) const {
+    const double torque = jointTorque / gearRatio, volts = jointSpeed * gearRatio / speedPerVolt() + torque * voltsPerTorque();
+    return std::abs(torque) <= 1.01 * peakTorque && std::abs(volts) <= 1.01 * bus;
+  }
+  /// corners of the region in the joint's speed-torque plane
+  std::array<std::pair<double, double>, 4> corners(double bus) const {
+    const double k = speedPerVolt() / gearRatio, margin = peakTorque * voltsPerTorque(), t = peakJointTorque();
+    return {{{k * (-bus - margin), t}, {k * (bus - margin), t}, {k * (bus + margin), -t}, {k * (-bus + margin), -t}}};
+  }
+};
+const Motor kMotor;
+
+/// One joint pair against its motors' EM-MOR on the low (solid) and high (dashed) bus voltage, older points fainter.
+void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color, double torqueLimit, float width) {
+  /// RaiSim clips the torque to the URDF effort limit, so a point on it is saturated
   const auto atLimit = [&](double torque) { return std::abs(torque) >= 0.99 * torqueLimit; };
-  int saturated = 0;
+  int outside = 0;
   for (int side = 0; side < 2; side++)
-    for (int k = 0; k < h.count; k++) saturated += atLimit(h.at(kJoints + joint + 3 * side, k));
+    for (int k = 0; k < h.count; k++) outside += !kMotor.inside(h.at(joint + 3 * side, k), h.at(kJoints + joint + 3 * side, k), kMotor.busLow);
   ImGui::BeginGroup();
-  ImGui::Text("%s  sat %.0f%%", title, h.count ? 50.0 * saturated / h.count : 0.0);
+  ImGui::Text("%s  out %.0f%%", title, h.count ? 50.0 * outside / h.count : 0.0);
   const ImVec2 p = ImGui::GetCursorScreenPos();
   ImGui::Dummy(ImVec2(width, kRegionHeight));
-  if (speedLimit <= 0.0)
-    for (int k = 0; k < h.count; k++) speedLimit = std::max({speedLimit, std::abs(double(h.at(joint, k))), std::abs(double(h.at(joint + 3, k))), 1.0});
-  const double xRange = 1.2 * speedLimit, yRange = 1.2 * torqueLimit;
+  const auto high = kMotor.corners(kMotor.busHigh), low = kMotor.corners(kMotor.busLow);
+  const double xRange = 1.15 * high[2].first, yRange = 1.2 * kMotor.peakJointTorque();
   const auto toScreen = [&](double speed, double torque) {
     return ImVec2(p.x + 0.5f * width * (1.0f + float(std::clamp(speed / xRange, -1.0, 1.0))),
                   p.y + 0.5f * kRegionHeight * (1.0f - float(std::clamp(torque / yRange, -1.0, 1.0))));
@@ -107,24 +127,33 @@ void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color
   draw->AddRectFilled(p, ImVec2(p.x + width, p.y + kRegionHeight), IM_COL32(255, 255, 255, 14), 3.0f);
   draw->AddLine(toScreen(-xRange, 0.0), toScreen(xRange, 0.0), IM_COL32(255, 255, 255, 40));
   draw->AddLine(toScreen(0.0, -yRange), toScreen(0.0, yRange), IM_COL32(255, 255, 255, 40));
-  const ImVec2 lo = toScreen(-speedLimit, torqueLimit), hi = toScreen(speedLimit, -torqueLimit);
-  draw->AddRectFilled(lo, hi, IM_COL32(70, 190, 105, 35));
-  draw->AddRect(lo, hi, IM_COL32(95, 215, 125, 200));
+  ImVec2 region[4];
+  for (int i = 0; i < 4; i++) region[i] = toScreen(low[i].first, low[i].second);
+  draw->AddConvexPolyFilled(region, 4, IM_COL32(70, 190, 105, 45));
+  draw->AddPolyline(region, 4, IM_COL32(95, 215, 125, 220), ImDrawFlags_Closed, 1.2f);
+  for (int i = 0; i < 4; i++) {
+    const ImVec2 a = toScreen(high[i].first, high[i].second), b = toScreen(high[(i + 1) % 4].first, high[(i + 1) % 4].second);
+    for (float t = 0.0f; t < 1.0f; t += 0.08f)
+      draw->AddLine(ImVec2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t), ImVec2(a.x + (b.x - a.x) * (t + 0.04f), a.y + (b.y - a.y) * (t + 0.04f)),
+                    IM_COL32(95, 215, 125, 150));
+  }
   for (int side = 0; side < 2; side++)
     for (int k = 0; k < h.count; k++) {
       const double speed = h.at(joint + 3 * side, k), torque = h.at(kJoints + joint + 3 * side, k);
       const int alpha = (side == 0 ? 50 : 25) + (side == 0 ? 200 : 100) * k / std::max(1, h.count);
-      const ImU32 rgb = atLimit(torque) ? IM_COL32(255, 160, 40, 0) : (color & 0x00FFFFFF);
+      ImU32 rgb = color & 0x00FFFFFF;
+      if (atLimit(torque)) rgb = IM_COL32(255, 160, 40, 0);
+      if (!kMotor.inside(speed, torque, kMotor.busLow)) rgb = IM_COL32(255, 60, 60, 0);
       const ImVec2 q = toScreen(speed, torque);
       draw->AddRectFilled(ImVec2(q.x - 1.2f, q.y - 1.2f), ImVec2(q.x + 1.2f, q.y + 1.2f), rgb | IM_COL32(0, 0, 0, alpha));
     }
   char text[48];
   const float small = 0.85f * ImGui::GetFontSize();
   const ImU32 label = IM_COL32(255, 255, 255, 130);
-  std::snprintf(text, sizeof(text), "\xC2\xB1%.0f N\xC2\xB7m", torqueLimit);
-  draw->AddText(ImGui::GetFont(), small, ImVec2(lo.x + 2.0f, lo.y + 1.0f), label, text);
-  std::snprintf(text, sizeof(text), "\xC2\xB1%.0f rad/s", speedLimit);
-  draw->AddText(ImGui::GetFont(), small, ImVec2(hi.x - ImGui::CalcTextSize(text).x * 0.85f - 2.0f, hi.y - small - 1.0f), label, text);
+  std::snprintf(text, sizeof(text), "\xC2\xB1%.0f N\xC2\xB7m", kMotor.peakJointTorque());
+  draw->AddText(ImGui::GetFont(), small, ImVec2(p.x + 3.0f, p.y + 1.0f), label, text);
+  std::snprintf(text, sizeof(text), "\xC2\xB1%.0f rad/s", kMotor.speedPerVolt() * kMotor.busLow / kMotor.gearRatio);
+  draw->AddText(ImGui::GetFont(), small, ImVec2(p.x + width - ImGui::CalcTextSize(text).x * 0.85f - 3.0f, p.y + kRegionHeight - small - 1.0f), label, text);
   ImGui::EndGroup();
 }
 
@@ -168,11 +197,11 @@ void drawPanel(Controls& c, const RaiwayDemo& demo, const Readout& r, const Join
     }
   }
   if (ImGui::CollapsingHeader("Motor Operating Region", ImGuiTreeNodeFlags_DefaultOpen)) {
-    ImGui::TextDisabled("torque vs speed, last 5 s, green: URDF limits\norange: at the torque limit");
+    ImGui::TextDisabled("ILM 115x25 x 7.15, 57 V solid, 65 V dashed, last 5 s\norange: at the 90 N\xC2\xB7m clip, red: outside at 57 V");
     const float width = (fullWidth - 2.0f * ImGui::GetStyle().ItemSpacing.x) / 3.0f;
     for (int j = 0; j < 3; j++) {
       if (j) ImGui::SameLine();
-      plotRegion(kJointGroups[j].first, h, j, kJointGroups[j].second, demo.speedLimit(), demo.torqueLimit(), width);
+      plotRegion(kJointGroups[j].first, h, j, kJointGroups[j].second, demo.torqueLimit(), width);
     }
   }
   ImGui::TextDisabled("Hold arrows or W/A/S/D to drive, R resets.\nDrag to orbit the camera, wheel to zoom.");
