@@ -20,7 +20,7 @@ namespace {
 
 /// a stalled tab or a slow frame costs simulated time instead of making the next frame catch up
 constexpr double kMaxStepPerFrame = 0.1;
-constexpr double kPlotSeconds = 5.0;
+constexpr double kPlotSeconds = 5.0, kRegionSeconds = 2.0;
 constexpr float kPlotWidth = 190.0f, kPlotHeight = 44.0f, kRegionHeight = 100.0f;
 const std::array<std::pair<const char*, ImU32>, 3> kJointGroups{
     {{"hip", IM_COL32(70, 130, 245, 255)}, {"knee", IM_COL32(235, 95, 65, 255)}, {"wheel", IM_COL32(60, 190, 110, 255)}}};
@@ -106,15 +106,17 @@ struct Motor {
 };
 const Motor kMotor;
 
-/// One joint pair against its motors' EM-MOR on the low (solid) and high (dashed) bus voltage, points fading out over 5 s.
+/// One joint pair against its motors' EM-MOR on the low (solid) and high (dashed) bus voltage, points fading out over kRegionSeconds.
 void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color, double torqueLimit, float width) {
   /// RaiSim clips the torque to the URDF effort limit, so a point on it is saturated
   const auto atLimit = [&](double torque) { return std::abs(torque) >= 0.99 * torqueLimit; };
+  const int window = std::min(h.count, int(std::lround(kRegionSeconds / kPlotSeconds * h.length)));
+  const int first = h.count - window;
   int outside = 0;
   for (int side = 0; side < 2; side++)
-    for (int k = 0; k < h.count; k++) outside += !kMotor.inside(h.at(joint + 3 * side, k), h.at(kJoints + joint + 3 * side, k), kMotor.busLow);
+    for (int k = first; k < h.count; k++) outside += !kMotor.inside(h.at(joint + 3 * side, k), h.at(kJoints + joint + 3 * side, k), kMotor.busLow);
   ImGui::BeginGroup();
-  ImGui::Text("%s  out %.0f%%", title, h.count ? 50.0 * outside / h.count : 0.0);
+  ImGui::Text("%s  out %.0f%%", title, window ? 50.0 * outside / window : 0.0);
   const ImVec2 p = ImGui::GetCursorScreenPos();
   ImGui::Dummy(ImVec2(width, kRegionHeight));
   const auto high = kMotor.corners(kMotor.busHigh), low = kMotor.corners(kMotor.busLow);
@@ -138,11 +140,11 @@ void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color
                     IM_COL32(95, 215, 125, 150));
   }
   for (int side = 0; side < 2; side++)
-    for (int k = 0; k < h.count; k++) {
+    for (int k = first; k < h.count; k++) {
       const double speed = h.at(joint + 3 * side, k), torque = h.at(kJoints + joint + 3 * side, k);
-      /// cubed, so a point keeps half its alpha after 1 s and is all but gone after 3 s, long before it drops off at 5 s
-      const float life = 1.0f - float(h.count - 1 - k) / float(h.length);
-      const int alpha = int((side == 0 ? 250.0f : 125.0f) * life * life * life);
+      /// squared, so a point keeps a quarter of its alpha halfway through its kRegionSeconds
+      const float life = 1.0f - float(h.count - 1 - k) / float(window);
+      const int alpha = int((side == 0 ? 250.0f : 125.0f) * life * life);
       ImU32 rgb = color & 0x00FFFFFF;
       if (atLimit(torque)) rgb = IM_COL32(255, 160, 40, 0);
       if (!kMotor.inside(speed, torque, kMotor.busLow)) rgb = IM_COL32(255, 60, 60, 0);
@@ -200,7 +202,7 @@ void drawPanel(Controls& c, const RaiwayDemo& demo, const Readout& r, const Join
     }
   }
   if (ImGui::CollapsingHeader("Motor Operating Region", ImGuiTreeNodeFlags_DefaultOpen)) {
-    ImGui::TextDisabled("ILM 115x25 x 7.15, 57 V solid, 65 V dashed, fading over 5 s\norange: at the 90 N\xC2\xB7m clip, red: outside at 57 V");
+    ImGui::TextDisabled("ILM 115x25 x 7.15, 57 V solid, 65 V dashed, fading over 2 s\norange: at the 90 N\xC2\xB7m clip, red: outside at 57 V");
     const float width = (fullWidth - 2.0f * ImGui::GetStyle().ItemSpacing.x) / 3.0f;
     for (int j = 0; j < 3; j++) {
       if (j) ImGui::SameLine();
