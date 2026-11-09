@@ -27,7 +27,7 @@ const std::array<std::pair<const char*, ImU32>, 3> kJointGroups{
 
 struct Controls {
   float vx = 0.0f, wz = 0.0f, keyVx = 1.0f, keyWz = 1.5f, levelSlider = 1.0f, level = 1.0f;
-  int terrain = 1, policy = 0;
+  int terrain = 1, policy = 0, restitutionTenths = 5;
   bool paused = false, showScan = true;
 };
 
@@ -174,6 +174,7 @@ void drawPanel(Controls& c, const RaiwayDemo& demo, const Readout& r, const Join
   ImGui::Combo("Terrain", &c.terrain, "flat\0stairs\0steps\0holes\0hurdles\0");
   ImGui::SliderFloat("Terrain level", &c.levelSlider, 0.0f, 1.0f, "%.2f");
   if (ImGui::IsItemDeactivatedAfterEdit()) c.level = c.levelSlider;
+  ImGui::Combo("Restitution", &c.restitutionTenths, "0\0" "0.1\0" "0.2\0" "0.3\0" "0.4\0" "0.5\0");
   ImGui::Separator();
   ImGui::SliderFloat("Forward speed vx [m/s]", &c.vx, -1.5f, 1.5f, "%.2f");
   ImGui::SliderFloat("Yaw rate wz [rad/s]", &c.wz, -2.0f, 2.0f, "%.2f");
@@ -315,6 +316,7 @@ int main() {
         tick = 0;
         history.clear(demo.policy().conDt);
       }
+      if (controls.restitutionTenths != applied.restitutionTenths) demo.setRestitution(0.1 * controls.restitutionTenths);
       applied = controls;
       app.endFrame();
     }

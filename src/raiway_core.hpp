@@ -27,6 +27,8 @@ constexpr double kScanLookMin = 0.2, kScanFovMax = 1.0, kScanLookBack = 0.2, kSc
 constexpr double kRingSpacingX = 0.2, kRingSpacingY = 0.1;
 constexpr std::array<int, 4> kRings{1, 6, 11, 16};
 constexpr double kFallHoldTime = 1.0;
+/// cfg.yaml's restitution coeff_default, with its 0.1 m/s threshold
+constexpr double kDefaultRestitution = 0.5;
 const std::vector<std::string> kTerrainNames{"flat", "stairs", "steps", "holes", "hurdles"};
 
 double xAt(int i) { return kX0 + i * kGrid; }
@@ -250,8 +252,7 @@ class RaiwayDemo {
   /// lockWorld(true/false) brackets every change to the world's objects, for a server streaming it from another thread
   RaiwayDemo(const std::string& rsc, raisim::World& world, std::function<void(bool)> lockWorld = {})
       : world_(world), lockWorld_(std::move(lockWorld)), policies_(loadPolicies(rsc)) {
-    /// cfg.yaml's restitution defaults, what training uses with its restitution randomization off
-    world_.setDefaultMaterial(0.8, 0.5, 0.1);
+    setRestitution(kDefaultRestitution);
     /// the robot comes from raiway.rscene, so a server can send its meshes to a browser viewer
     robot_ = dynamic_cast<raisim::ArticulatedSystem*>(world_.getObject("/World/Raiway"));
     RSFATAL_IF(!robot_, "the world holds no /World/Raiway; build it from " << rsc << "/raiway.rscene")
@@ -274,6 +275,8 @@ class RaiwayDemo {
 
   const std::vector<Policy>& policies() const { return policies_; }
   const Policy& policy() const { return policies_[policyIndex_]; }
+  /// no material pair is defined, so every contact takes the default material, as training's does with its randomization off
+  void setRestitution(double restitution) { world_.setDefaultMaterial(0.8, restitution, 0.1); }
   raisim::ArticulatedSystem* robot() const { return robot_; }
   int substeps() const { return int(std::lround(policy().conDt / policy().simDt)); }
   const std::vector<Eigen::Vector3d>& scanPoints() const { return scanPoints_; }
