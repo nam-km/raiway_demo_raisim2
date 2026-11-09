@@ -21,7 +21,9 @@ namespace {
 /// a stalled tab or a slow frame costs simulated time instead of making the next frame catch up
 constexpr double kMaxStepPerFrame = 0.1;
 constexpr double kPlotSeconds = 5.0;
-constexpr float kPlotWidth = 190.0f, kPlotHeight = 44.0f;
+constexpr float kPlotWidth = 190.0f, kPlotHeight = 44.0f, kRegionHeight = 100.0f;
+const std::array<std::pair<const char*, ImU32>, 3> kJointGroups{
+    {{"hip", IM_COL32(70, 130, 245, 255)}, {"knee", IM_COL32(235, 95, 65, 255)}, {"wheel", IM_COL32(60, 190, 110, 255)}}};
 
 struct Controls {
   float vx = 0.0f, wz = 0.0f, keyVx = 1.0f, keyWz = 1.5f, levelSlider = 1.0f, level = 1.0f;
@@ -83,6 +85,49 @@ void plotJoint(const char* title, const JointHistory& h, int row, ImU32 color, c
   ImGui::EndGroup();
 }
 
+/// One joint pair in its torque-speed plane: the URDF effort and velocity limits as the region, older points fainter.
+void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color, double speedLimit, double torqueLimit, float width) {
+  /// RaiSim clips the torque to the limit, so a point on it is a saturated motor
+  const auto atLimit = [&](double torque) { return std::abs(torque) >= 0.99 * torqueLimit; };
+  int saturated = 0;
+  for (int side = 0; side < 2; side++)
+    for (int k = 0; k < h.count; k++) saturated += atLimit(h.at(kJoints + joint + 3 * side, k));
+  ImGui::BeginGroup();
+  ImGui::Text("%s  sat %.0f%%", title, h.count ? 50.0 * saturated / h.count : 0.0);
+  const ImVec2 p = ImGui::GetCursorScreenPos();
+  ImGui::Dummy(ImVec2(width, kRegionHeight));
+  if (speedLimit <= 0.0)
+    for (int k = 0; k < h.count; k++) speedLimit = std::max({speedLimit, std::abs(double(h.at(joint, k))), std::abs(double(h.at(joint + 3, k))), 1.0});
+  const double xRange = 1.2 * speedLimit, yRange = 1.2 * torqueLimit;
+  const auto toScreen = [&](double speed, double torque) {
+    return ImVec2(p.x + 0.5f * width * (1.0f + float(std::clamp(speed / xRange, -1.0, 1.0))),
+                  p.y + 0.5f * kRegionHeight * (1.0f - float(std::clamp(torque / yRange, -1.0, 1.0))));
+  };
+  ImDrawList* draw = ImGui::GetWindowDrawList();
+  draw->AddRectFilled(p, ImVec2(p.x + width, p.y + kRegionHeight), IM_COL32(255, 255, 255, 14), 3.0f);
+  draw->AddLine(toScreen(-xRange, 0.0), toScreen(xRange, 0.0), IM_COL32(255, 255, 255, 40));
+  draw->AddLine(toScreen(0.0, -yRange), toScreen(0.0, yRange), IM_COL32(255, 255, 255, 40));
+  const ImVec2 lo = toScreen(-speedLimit, torqueLimit), hi = toScreen(speedLimit, -torqueLimit);
+  draw->AddRectFilled(lo, hi, IM_COL32(70, 190, 105, 35));
+  draw->AddRect(lo, hi, IM_COL32(95, 215, 125, 200));
+  for (int side = 0; side < 2; side++)
+    for (int k = 0; k < h.count; k++) {
+      const double speed = h.at(joint + 3 * side, k), torque = h.at(kJoints + joint + 3 * side, k);
+      const int alpha = (side == 0 ? 50 : 25) + (side == 0 ? 200 : 100) * k / std::max(1, h.count);
+      const ImU32 rgb = atLimit(torque) ? IM_COL32(255, 160, 40, 0) : (color & 0x00FFFFFF);
+      const ImVec2 q = toScreen(speed, torque);
+      draw->AddRectFilled(ImVec2(q.x - 1.2f, q.y - 1.2f), ImVec2(q.x + 1.2f, q.y + 1.2f), rgb | IM_COL32(0, 0, 0, alpha));
+    }
+  char text[48];
+  const float small = 0.85f * ImGui::GetFontSize();
+  const ImU32 label = IM_COL32(255, 255, 255, 130);
+  std::snprintf(text, sizeof(text), "\xC2\xB1%.0f N\xC2\xB7m", torqueLimit);
+  draw->AddText(ImGui::GetFont(), small, ImVec2(lo.x + 2.0f, lo.y + 1.0f), label, text);
+  std::snprintf(text, sizeof(text), "\xC2\xB1%.0f rad/s", speedLimit);
+  draw->AddText(ImGui::GetFont(), small, ImVec2(hi.x - ImGui::CalcTextSize(text).x * 0.85f - 2.0f, hi.y - small - 1.0f), label, text);
+  ImGui::EndGroup();
+}
+
 /// Level edits reach c.level only once the slider is released, since every change rebuilds the terrain.
 void drawPanel(Controls& c, const RaiwayDemo& demo, const Readout& r, const JointHistory& h, bool& reset) {
   ImGui::SetNextWindowPos(ImVec2(12, 12), ImGuiCond_FirstUseEver);
@@ -112,14 +157,22 @@ void drawPanel(Controls& c, const RaiwayDemo& demo, const Readout& r, const Join
   ImGui::Text("Command    vx %+.2f m/s   wz %+.2f rad/s", r.vx, r.wz);
   ImGui::Text("Measured   vx %+.2f m/s   wz %+.2f rad/s", demo.bodyLinVel()[0], demo.bodyAngVel()[2]);
   ImGui::Text("Real-time  %.2fx", r.realTime);
-  if (ImGui::CollapsingHeader("Joints, last 5 s (left solid, right faint)", ImGuiTreeNodeFlags_DefaultOpen)) {
-    const std::array<std::pair<const char*, ImU32>, 3> joints{
-        {{"hip", IM_COL32(70, 130, 245, 255)}, {"knee", IM_COL32(235, 95, 65, 255)}, {"wheel", IM_COL32(60, 190, 110, 255)}}};
+  const float fullWidth = 2.0f * kPlotWidth + ImGui::GetStyle().ItemSpacing.x;
+  if (ImGui::CollapsingHeader("Joint Vel & Torque", ImGuiTreeNodeFlags_DefaultOpen)) {
+    ImGui::TextDisabled("last 5 s, left leg solid, right leg faint");
     for (int j = 0; j < 3; j++) {
-      const std::string name = joints[j].first;
-      plotJoint((name + " velocity").c_str(), h, j, joints[j].second, "rad/s", 0.0);
+      const std::string name = kJointGroups[j].first;
+      plotJoint((name + " velocity").c_str(), h, j, kJointGroups[j].second, "rad/s", 0.0);
       ImGui::SameLine();
-      plotJoint((name + " torque").c_str(), h, kJoints + j, joints[j].second, "N\xC2\xB7m", demo.torqueLimit());
+      plotJoint((name + " torque").c_str(), h, kJoints + j, kJointGroups[j].second, "N\xC2\xB7m", demo.torqueLimit());
+    }
+  }
+  if (ImGui::CollapsingHeader("Motor Operating Region", ImGuiTreeNodeFlags_DefaultOpen)) {
+    ImGui::TextDisabled("torque vs speed, last 5 s, green: URDF limits\norange: at the torque limit");
+    const float width = (fullWidth - 2.0f * ImGui::GetStyle().ItemSpacing.x) / 3.0f;
+    for (int j = 0; j < 3; j++) {
+      if (j) ImGui::SameLine();
+      plotRegion(kJointGroups[j].first, h, j, kJointGroups[j].second, demo.speedLimit(), demo.torqueLimit(), width);
     }
   }
   ImGui::TextDisabled("Hold arrows or W/A/S/D to drive, R resets.\nDrag to orbit the camera, wheel to zoom.");

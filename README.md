@@ -17,7 +17,9 @@ reset. Holding ↑/↓ or W/S drives at the key forward speed, ←/→ or A/D tu
 the sliders; R resets. A fall (a contact other than wheels and shanks, or tilt past 60°) resets after a second,
 leaving the map at once. Orange spheres are the actor's height scan; the page's *Height scan* box hides them and
 its bottom-left corner names the running policy. The page also shows the command, the measured body velocity, the
-real-time factor and, like the MuJoCo demo, hip, knee and wheel velocity and torque over the last 5 s.
+real-time factor and, like the MuJoCo demo, hip, knee and wheel velocity and torque over the last 5 s, also as
+operating points against the URDF's effort and velocity limits (a box region: Raiway's URDF defines no motor model
+for RaiSim's EM-MOR).
 
 ## Browser page
 
