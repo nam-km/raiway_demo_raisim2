@@ -18,11 +18,12 @@ its 0.1 m/s threshold; training draws it per episode from 0.2 to 0.5). Holding �
 the sliders; R resets. A fall (a contact other than wheels and shanks, or tilt past 60°) resets after a second,
 leaving the map at once. Orange spheres are the actor's height scan; the page's *Height scan* box hides them and
 its bottom-left corner names the running policy. The page also shows the command, the measured body velocity, the
-real-time factor and, like the MuJoCo demo, hip, knee and wheel velocity and torque over the last 5 s, also as
-operating points against the motor operating region (EM-MOR) of Raiway's actuators: a TQ RoboDrive ILM 115x25
-(star-serial: 0.281 N·m/A, 0.14 Ω, 12.7 N·m peak) behind a 7.15:1 reducer on the 57–65 V bus of a 16s pack. Its
-peak, 91 N·m, and its no-load speed at 57.6 V, 25 rad/s, are the URDF's limits. The region is drawn only; the
-simulation keeps the URDF's 90 N·m clip, as in training.
+real-time factor and, like the MuJoCo demo, hip, knee and wheel velocity and torque over the last 5 s. Over the last
+2 s it plots the requested PD torque against the motor operating region (EM-MOR) of Raiway's actuators, in red where
+the request lies outside it: a TQ RoboDrive ILM 115x25 (star-serial: 0.281 N·m/A, 0.14 Ω, 12.7 N·m peak) behind a
+7.15:1 reducer on the 57–65 V bus of a 16s pack. Its peak, 91 N·m, and its no-load speed at 57.6 V, 25 rad/s, are the
+URDF's limits. The region is drawn only; the simulation keeps the URDF's 90 N·m clip, as in training, so the applied
+torque never leaves it and only the request shows what the motors could not give.
 
 ## Browser page
 

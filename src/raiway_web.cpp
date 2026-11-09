@@ -35,20 +35,21 @@ struct Readout {
   double vx = 0.0, wz = 0.0, realTime = 1.0;
 };
 
-/// The last kPlotSeconds of joint velocities (rows 0-5) and torques (rows 6-11), one sample per control step.
+/// The last kPlotSeconds of joint velocities, applied and requested torques (rows of 6 each), one sample per control step.
 struct JointHistory {
   int length = 2, head = 0, count = 0;
-  std::vector<std::array<float, 2 * kJoints>> samples;
+  std::vector<std::array<float, 3 * kJoints>> samples;
 
   void clear(double controlDt) {
     length = std::max(2, int(std::lround(kPlotSeconds / controlDt)));
     samples.assign(length, {});
     head = count = 0;
   }
-  void record(const Eigen::VectorXd& velocity, const Eigen::VectorXd& torque) {
+  void record(const Eigen::VectorXd& velocity, const Eigen::VectorXd& torque, const Eigen::VectorXd& requested) {
     for (int j = 0; j < kJoints; j++) {
       samples[head][j] = float(velocity[j]);
       samples[head][kJoints + j] = float(torque[j]);
+      samples[head][2 * kJoints + j] = float(requested[j]);
     }
     head = (head + 1) % length;
     count = std::min(count + 1, length);
@@ -106,15 +107,14 @@ struct Motor {
 };
 const Motor kMotor;
 
-/// One joint pair against its motors' EM-MOR on the low (solid) and high (dashed) bus voltage, points fading out over kRegionSeconds.
-void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color, double torqueLimit, float width) {
-  /// RaiSim clips the torque to the URDF effort limit, so a point on it is saturated
-  const auto atLimit = [&](double torque) { return std::abs(torque) >= 0.99 * torqueLimit; };
+/// One joint pair's requested torque against its motors' EM-MOR: the applied torque is clipped at 90 N·m, inside the 91 N·m peak, so only the request shows what the motors could not give.
+void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color, float width) {
+  const int requested = 2 * kJoints + joint;
   const int window = std::min(h.count, int(std::lround(kRegionSeconds / kPlotSeconds * h.length)));
   const int first = h.count - window;
   int outside = 0;
   for (int side = 0; side < 2; side++)
-    for (int k = first; k < h.count; k++) outside += !kMotor.inside(h.at(joint + 3 * side, k), h.at(kJoints + joint + 3 * side, k), kMotor.busLow);
+    for (int k = first; k < h.count; k++) outside += !kMotor.inside(h.at(joint + 3 * side, k), h.at(requested + 3 * side, k), kMotor.busLow);
   ImGui::BeginGroup();
   ImGui::Text("%s  out %.0f%%", title, window ? 50.0 * outside / window : 0.0);
   const ImVec2 p = ImGui::GetCursorScreenPos();
@@ -141,13 +141,11 @@ void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color
   }
   for (int side = 0; side < 2; side++)
     for (int k = first; k < h.count; k++) {
-      const double speed = h.at(joint + 3 * side, k), torque = h.at(kJoints + joint + 3 * side, k);
+      const double speed = h.at(joint + 3 * side, k), torque = h.at(requested + 3 * side, k);
       /// squared, so a point keeps a quarter of its alpha halfway through its kRegionSeconds
       const float life = 1.0f - float(h.count - 1 - k) / float(window);
       const int alpha = int((side == 0 ? 250.0f : 125.0f) * life * life);
-      ImU32 rgb = color & 0x00FFFFFF;
-      if (atLimit(torque)) rgb = IM_COL32(255, 160, 40, 0);
-      if (!kMotor.inside(speed, torque, kMotor.busLow)) rgb = IM_COL32(255, 60, 60, 0);
+      const ImU32 rgb = kMotor.inside(speed, torque, kMotor.busLow) ? color & 0x00FFFFFF : IM_COL32(255, 60, 60, 0);
       const ImVec2 q = toScreen(speed, torque);
       draw->AddRectFilled(ImVec2(q.x - 1.2f, q.y - 1.2f), ImVec2(q.x + 1.2f, q.y + 1.2f), rgb | IM_COL32(0, 0, 0, alpha));
     }
@@ -202,11 +200,11 @@ void drawPanel(Controls& c, const RaiwayDemo& demo, const Readout& r, const Join
     }
   }
   if (ImGui::CollapsingHeader("Motor Operating Region", ImGuiTreeNodeFlags_DefaultOpen)) {
-    ImGui::TextDisabled("ILM 115x25 x 7.15, 57 V solid, 65 V dashed, fading over 2 s\norange: at the 90 N\xC2\xB7m clip, red: outside at 57 V");
+    ImGui::TextDisabled("requested PD torque vs ILM 115x25 x 7.15\n57 V solid, 65 V dashed, red: past 57 V, 2 s");
     const float width = (fullWidth - 2.0f * ImGui::GetStyle().ItemSpacing.x) / 3.0f;
     for (int j = 0; j < 3; j++) {
       if (j) ImGui::SameLine();
-      plotRegion(kJointGroups[j].first, h, j, kJointGroups[j].second, demo.torqueLimit(), width);
+      plotRegion(kJointGroups[j].first, h, j, kJointGroups[j].second, width);
     }
   }
   ImGui::TextDisabled("Hold arrows or W/A/S/D to drive, R resets.\nDrag to orbit the camera, wheel to zoom.");
@@ -287,7 +285,7 @@ int main() {
         demo.applyPd();
         world.integrate();
         if (++tick % demo.substeps() == 0) {
-          history.record(demo.jointVelocity(), demo.jointTorque());
+          history.record(demo.jointVelocity(), demo.jointTorque(), demo.requestedJointTorque());
           if (demo.checkEpisode()) history.clear(demo.policy().conDt);
           controlDue = true;
         }

@@ -289,6 +289,8 @@ class RaiwayDemo {
     return genForce_.tail(kJoints).cwiseMax(robot_->getActuationLowerLimits().e().tail(kJoints))
         .cwiseMin(robot_->getActuationUpperLimits().e().tail(kJoints));
   }
+  /// the last substep's PD torques as the policy's targets ask for them, before the effort clip
+  Eigen::VectorXd requestedJointTorque() const { return genForce_.tail(kJoints); }
   double torqueLimit() const { return robot_->getActuationUpperLimits().e().tail(kJoints).maxCoeff(); }
 
   void setPolicy(int index) {
