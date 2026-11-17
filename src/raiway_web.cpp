@@ -57,7 +57,14 @@ struct JointHistory {
   float at(int row, int k) const { return samples[(head - count + k + length) % length][row]; }
 };
 
-/// The left joint solid and the right one faint, as in raiway_demo_mujoco; a zero range scales to the data.
+/// a light tint of the joint colour for the left leg and a dark shade for the right, so the pair differs in lightness
+ImU32 legColor(ImU32 color, int side) {
+  ImVec4 c = ImGui::ColorConvertU32ToFloat4(color);
+  for (float* v : {&c.x, &c.y, &c.z}) *v = side == 0 ? *v + 0.5f * (1.0f - *v) : 0.62f * *v;
+  return ImGui::ColorConvertFloat4ToU32(c);
+}
+
+/// The left joint light and the right one dark (legColor); a zero range scales to the data.
 void plotJoint(const char* title, const JointHistory& h, int row, ImU32 color, const char* unit, double range) {
   ImGui::BeginGroup();
   ImGui::TextUnformatted(title);
@@ -78,7 +85,7 @@ void plotJoint(const char* title, const JointHistory& h, int row, ImU32 color, c
       const double value = std::clamp(h.at(row + 3 * side, k) / range, -1.0, 1.0);
       line[k] = ImVec2(p.x + kPlotWidth * float(h.length - h.count + k) / float(h.length - 1), mid - 0.5f * kPlotHeight * float(value));
     }
-    draw->AddPolyline(line.data(), h.count, side == 0 ? color : (color & 0x00FFFFFF) | IM_COL32(0, 0, 0, 100), ImDrawFlags_None, 1.5f);
+    draw->AddPolyline(line.data(), h.count, legColor(color, side), ImDrawFlags_None, 1.5f);
   }
   char scale[32];
   std::snprintf(scale, sizeof(scale), "\xC2\xB1%.0f %s", range, unit);
@@ -144,8 +151,9 @@ void plotRegion(const char* title, const JointHistory& h, int joint, ImU32 color
       const double speed = h.at(joint + 3 * side, k), torque = h.at(requested + 3 * side, k);
       /// squared, so a point keeps a quarter of its alpha halfway through its kRegionSeconds
       const float life = 1.0f - float(h.count - 1 - k) / float(window);
-      const int alpha = int((side == 0 ? 250.0f : 125.0f) * life * life);
-      const ImU32 rgb = kMotor.inside(speed, torque, kMotor.busLow) ? color & 0x00FFFFFF : IM_COL32(255, 60, 60, 0);
+      const bool inside = kMotor.inside(speed, torque, kMotor.busLow);
+      const int alpha = int((inside || side == 0 ? 250.0f : 125.0f) * life * life);
+      const ImU32 rgb = inside ? legColor(color, side) & 0x00FFFFFF : IM_COL32(255, 60, 60, 0);
       const ImVec2 q = toScreen(speed, torque);
       draw->AddRectFilled(ImVec2(q.x - 1.2f, q.y - 1.2f), ImVec2(q.x + 1.2f, q.y + 1.2f), rgb | IM_COL32(0, 0, 0, alpha));
     }
@@ -191,7 +199,7 @@ void drawPanel(Controls& c, const RaiwayDemo& demo, const Readout& r, const Join
   ImGui::Text("Real-time  %.2fx", r.realTime);
   const float fullWidth = 2.0f * kPlotWidth + ImGui::GetStyle().ItemSpacing.x;
   if (ImGui::CollapsingHeader("Joint Vel & Torque", ImGuiTreeNodeFlags_DefaultOpen)) {
-    ImGui::TextDisabled("last 5 s, left leg solid, right leg faint");
+    ImGui::TextDisabled("last 5 s, left leg light, right leg dark");
     for (int j = 0; j < 3; j++) {
       const std::string name = kJointGroups[j].first;
       plotJoint((name + " velocity").c_str(), h, j, kJointGroups[j].second, "rad/s", 0.0);
