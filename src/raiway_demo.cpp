@@ -207,8 +207,8 @@ int main(int argc, char* argv[]) {
   }
   const size_t vxSlider = server.addSlider("Forward speed vx [m/s]", -1.5, 1.5, 0.0);
   const size_t wzSlider = server.addSlider("Yaw rate wz [rad/s]", -2.0, 2.0, 0.0);
-  const size_t keyVxSlider = server.addSlider("Key forward speed [m/s]", 0.0, 1.5, 1.0);
-  const size_t keyWzSlider = server.addSlider("Key yaw rate [rad/s]", 0.0, 2.0, 1.5);
+  const size_t keyVxSlider = server.addSlider("Key forward speed [m/s]", 0.0, 1.5, 1.5);
+  const size_t keyWzSlider = server.addSlider("Key yaw rate [rad/s]", 0.0, 2.0, 1.0);
   const size_t terrainSlider = server.addSlider("Terrain (0 flat, 1 stairs, 2 steps, 3 holes, 4 hurdles)", 0.0, 4.0, 1.0);
   const size_t levelSlider = server.addSlider("Terrain level", 0.0, 1.0, 1.0);
   const size_t policySlider = server.addSlider("Policy (" + policyNames + ")", 0.0, double(demo.policies().size() - 1), 0.0);

@@ -26,9 +26,9 @@ const std::array<std::pair<const char*, ImU32>, 3> kJointGroups{
     {{"hip", IM_COL32(70, 130, 245, 255)}, {"knee", IM_COL32(235, 95, 65, 255)}, {"wheel", IM_COL32(60, 190, 110, 255)}}};
 
 struct Controls {
-  float vx = 0.0f, wz = 0.0f, keyVx = 1.0f, keyWz = 1.5f, levelSlider = 1.0f, level = 1.0f;
+  float vx = 0.0f, wz = 0.0f, keyVx = 1.5f, keyWz = 1.0f, levelSlider = 1.0f, level = 1.0f;
   int terrain = 1, policy = 0, restitutionTenths = 5;
-  bool paused = false, showScan = true;
+  bool paused = false, showScan = false;
 };
 
 struct Readout {

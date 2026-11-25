@@ -14,10 +14,10 @@ The MuJoCo sibling, `raiway_demo_mujoco`, runs the same policies in MuJoCo.
 
 Velocity command sliders (vx ±1.5 m/s, wz ±2 rad/s), terrain (flat, stairs, steps, holes, hurdles) and level, policy,
 reset; the page also sets the restitution of every contact, 0 to 0.5 (default 0.5, training's `coeff_default`, with
-its 0.1 m/s threshold; training draws it per episode from 0.2 to 0.5). Holding ↑/↓ or W/S drives at the key forward speed, ←/→ or A/D turns at the key yaw rate; releasing returns to
+its 0.1 m/s threshold; training draws it per episode from 0.2 to 0.5). Holding ↑/↓ or W/S drives at the key forward speed (default 1.5 m/s), ←/→ or A/D turns at the key yaw rate (default 1.0 rad/s); releasing returns to
 the sliders; R resets. A fall (a contact other than wheels and shanks, or tilt past 60°) resets after a second,
-leaving the map at once. Orange spheres are the actor's height scan; the page's *Height scan* box hides them and
-its bottom-left corner names the running policy. The page also shows the command, the measured body velocity, the
+leaving the map at once. Orange spheres are the actor's height scan, hidden until the page's *Height scan* box is ticked; the page's
+bottom-left corner names the running policy. The page also shows the command, the measured body velocity, the
 real-time factor and, like the MuJoCo demo, hip, knee and wheel velocity and torque over the last 5 s. Over the last
 2 s it plots the requested PD torque against the motor operating region (EM-MOR) of Raiway's actuators, in red where
 the request lies outside it: a TQ RoboDrive ILM 115x25 (star-serial: 0.281 N·m/A, 0.14 Ω, 12.7 N·m peak) behind a
